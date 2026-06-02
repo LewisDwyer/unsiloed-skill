@@ -10,7 +10,7 @@ Everything lives in a single `SKILL.md` file using curl and jq. No Python, no ex
 
 The skill teaches the agent four Unsiloed operations and how to pick between them:
 
-- **Parse** — read everything on the page and return markdown of each layout region. The default for "what does this say"
+- **Parse** — read everything on the page and return Markdown of each layout region. The default for "what does this say"
 - **Extract** — pull named fields out as JSON with a confidence score per field. Use this when the user asks for structured output
 - **Classify** — label a document as one of several candidate categories
 - **Split** — break a single PDF that contains several documents into separate files by category
@@ -46,7 +46,7 @@ Verify the skill is ready:
 openclaw skills info unsiloed
 ```
 
-The output should show `✓ Ready` with `Environment: ✓ UNSILOED_API_KEY` listed.
+The first line of the output should read `unsiloed ✓ Ready`. To see it alongside every other skill, run `openclaw skills check` — `unsiloed` should appear under **Ready and visible to model**.
 
 ## Using the Skill
 
