@@ -20,7 +20,7 @@ The skill teaches the agent four Unsiloed operations and how to pick between the
 Install directly from this repo using the OpenClaw CLI:
 
 ```
-openclaw skills install git:https://github.com/LewisDwyer/unsiloed-skill
+openclaw skills install git:https://github.com/Unsiloed-AI/unsiloed-skill
 ```
 
 OpenClaw fetches the repo, registers the skill in the workspace, and tracks the origin for future updates with `openclaw skills update --all`.
