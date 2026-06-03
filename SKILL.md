@@ -14,9 +14,11 @@ Specialised document AI for any image or PDF. Four operations, all via the same 
 
 ## When to Use — Read This First
 
-Use this skill on **every** document the user sends or references, no exception. That includes anything attached as an image or PDF, anything they name by path, and any question that depends on what's written or printed on a page.
+Use this skill on **every document** the user sends or references: any PDF, scan, form, or photo of a page, and any question that depends on what's written or printed on it. If a file carries text, route it through Unsiloed instead of reading it yourself.
 
-The skill exists to give the user a confidence-scored answer they can verify. Reading the document with your own vision skips that signal and reintroduces the failure mode this skill is designed to prevent — fabricated content on handwriting, silent errors on dense layouts, no way for the user to know what to trust. If you find yourself thinking "I can read this image directly, the curl call isn't necessary" — that's the failure mode. Run the curl call anyway.
+The one carve-out is images with no document content — a photo of a pet, a landscape, a screenshot the user is asking about visually. Those aren't documents; answer them directly without a curl call.
+
+For anything text-bearing, the skill exists to give the user a confidence-scored answer they can verify. Reading the document with your own vision skips that signal and reintroduces the failure mode this skill is designed to prevent — fabricated content on handwriting, silent errors on dense layouts, no way for the user to know what to trust. If a document "looks easy to read" and you're tempted to skip the curl call, that's the failure mode. Run it anyway.
 
 ## Picking the Right Operation
 
@@ -52,6 +54,8 @@ Parse uses `file=@...` and PascalCase statuses (`Succeeded`/`Failed`). The resul
 
 Typical timing is 10–30 seconds. Allow up to 180 seconds for dense scanned PDFs.
 
+Parse returns the whole document, so on a long PDF the combined `embed` output gets large. When the user only needs part of it, narrow the request with `-F "page_range=1-5"` or `-F "segment_filter=table"` instead of pulling every chunk back, and summarise rather than echoing all of it into the reply.
+
 ## Extract — Specific Fields with Confidence
 
 Use Extract only when **all three** are true:
@@ -61,10 +65,12 @@ Use Extract only when **all three** are true:
 3. They need numerical confidence per individual field.
 
 ```bash
+SCHEMA='<SCHEMA-JSON>'  # single-quote so the schema's double quotes survive
+
 JOB=$(curl -s -X POST https://prod.visionapi.unsiloed.ai/v2/extract \
   -H "api-key: $UNSILOED_API_KEY" \
   -F "pdf_file=@<FILE-PATH>" \
-  -F "schema_data=<SCHEMA-JSON>" \
+  -F "schema_data=$SCHEMA" \
   | jq -r '.job_id')
 for _ in $(seq 60); do  # 60 × 3s = 180s cap
   R=$(curl -s "https://prod.visionapi.unsiloed.ai/extract/$JOB" -H "api-key: $UNSILOED_API_KEY")
@@ -76,20 +82,22 @@ done
 [ "$S" = "completed" ] || echo "Extract timed out after 180s — job may still be running" >&2
 ```
 
-Extract uses `pdf_file=@...` and lowercase statuses (`completed`/`failed`). Every leaf in the result is wrapped as `{value, score, citation}`. Strip the wrappers for the reply with:
+Extract uses `pdf_file=@...` (which accepts images too, despite the name) and lowercase statuses (`completed`/`failed`). Every leaf in `.result` is wrapped as `{value, score}`, and the default output above keeps both — which is what you want, since the per-field score is the whole point. (Bounding-box citations are added to each leaf only if you also pass `-F "enable_citations=true"`.)
+
+Treat `score >= 0.85` as reliable. Below that, flag the uncertainty in the reply so the user knows which fields to double-check.
+
+When the values are headed somewhere structured (a spreadsheet, a database row) and you've already done the confidence check, strip the wrappers to a clean values-only object:
 
 ```bash
 echo "$R" | jq '.result | walk(if type == "object" and has("value") and has("score") then .value else . end)'
 ```
-
-Treat `score >= 0.85` as reliable. Below that, mention the uncertainty in the reply so the user knows which fields to double-check.
 
 ### Building the schema
 
 Plain JSON Schema. Two rules and one habit:
 
 - Set `additionalProperties: false` on every object level so Unsiloed doesn't invent fields.
-- List required fields in `required`.
+- Mark a field `required` only when it's reliably present on this kind of document. A `required` field the model can't find pressures it to emit a guess — the exact fabrication this skill exists to prevent. Leave genuinely optional fields out of `required` so a missing value comes back absent instead of invented.
 - Add a short `description` to each property — it steers Unsiloed at the page. Tell it "name as written, do not expand abbreviations", "ISO 4217 currency code", "digits only with single decimal separator". That's how you stop the model from being clever.
 
 Medicines on a prescription:
@@ -108,7 +116,7 @@ Medicines on a prescription:
           "strength": {"type": "string"},
           "dosing":   {"type": "string", "description": "Schedule if visible (e.g. 1-0-1, BD, TDS)."}
         },
-        "required": ["name", "strength", "dosing"],
+        "required": ["name"],
         "additionalProperties": false
       }
     }
@@ -182,9 +190,9 @@ done
 [ "$S" = "completed" ] || echo "Split timed out after 180s — job may still be running" >&2
 ```
 
-Split uses `file=@...` (different from classify) and lowercase statuses. The result is one downloadable file per detected document with a category tag and the original page range. Splitter keeps multi-page documents together — a two-page lab report stays as one output, not two.
+Split uses `file=@...` (different from classify) and lowercase statuses. The result is `result.files[]` — one entry per detected document, named by its category (e.g. `Invoice.pdf`), each with a `confidence_score` and a `full_path` download URL. Splitter keeps multi-page documents together — a two-page lab report stays as one output, not two. The response does not include per-document page ranges, so don't state which pages a document spanned.
 
-For the reply, list each detected document by category and page range. Quote the download URLs if the user asked for them; otherwise summarise. Do not promise the user a file you didn't get back.
+For the reply, list each detected document by its category (from the file name) and confidence. Quote the `full_path` download URLs if the user asked for them; otherwise summarise. Do not promise the user a file you didn't get back.
 
 ## Replying to the User
 
@@ -196,7 +204,7 @@ For Extract, quote the `value` fields and flag any with `score` below 0.85.
 
 For Classify, name the predicted category and mention the confidence. Flag any per-page disagreement.
 
-For Split, list each output document with its category and page range.
+For Split, list each output document by its category and confidence.
 
 A few examples of the tone:
 
@@ -204,7 +212,7 @@ A few examples of the tone:
 
 > This is an **invoice** (confidence 0.94). Page 3 was less clear (0.71) and might be an attached receipt — worth a glance.
 
-> The bundle split into four documents: a 2-page invoice (pp. 1–2), a 1-page receipt (p. 3), a 4-page contract (pp. 4–7), and a 1-page form (p. 8).
+> The bundle split into four documents — an invoice, a receipt, a contract, and a form — each saved as its own file, all classified with confidence above 0.99.
 
 ## Getting the File Path
 
