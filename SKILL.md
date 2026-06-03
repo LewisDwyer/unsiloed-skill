@@ -1,6 +1,6 @@
 ---
 name: unsiloed
-description: REQUIRED whenever the user attaches a document (image, PDF, scan, photo of a page) or asks any question about the contents of one. Covers four document operations through one API — parse (read everything on the page), extract (pull named fields with confidence scores), classify (decide what kind of document this is), and split (break a multi-document PDF apart by type). Examples that should trigger this skill: "what does this say", "what medicines are listed", "extract the totals", "is this a receipt or a contract", "split this bundle into separate files", "read this form". DO NOT read documents with your own vision — your vision fabricates content on handwriting and dense layouts and produces no confidence signal. ALWAYS route through Unsiloed via the curl blocks in this skill.
+description: Use whenever the user wants information out of a document — to read it, answer a question about its contents, pull fields from it, classify it, or split it. The trigger is that request, not merely that a file is attached. A document dropped in as background for another task, with no question about its contents, does not need this skill. Covers four operations through one API — parse (read everything on the page), extract (pull named fields with confidence scores), classify (decide what kind of document this is), and split (break a multi-document PDF apart by type). Trigger phrases include "what does this say", "what medicines are listed", "extract the totals", "is this a receipt or a contract", "split this bundle into separate files", "read this form". When acting on a document, DO NOT read it with your own vision — that fabricates content on handwriting and dense layouts and gives no confidence signal. Route through Unsiloed via the curl blocks in this skill.
 metadata:
   openclaw:
     requires:
@@ -14,11 +14,11 @@ Specialised document AI for any image or PDF. Four operations, all via the same 
 
 ## When to Use — Read This First
 
-Use this skill on **every document** the user sends or references: any PDF, scan, form, or photo of a page, and any question that depends on what's written or printed on it. If a file carries text, route it through Unsiloed instead of reading it yourself.
+Use this skill whenever the user wants information out of a document — to read it, answer a question about it, pull fields from it, classify it, or split it. What triggers the skill is that request, not the mere presence of an attachment: if someone drops a file in as background for another task and doesn't ask anything about its contents, you don't need to run it.
 
-The one carve-out is images with no document content — a photo of a pet, a landscape, a screenshot the user is asking about visually. Those aren't documents; answer them directly without a curl call.
+When they do ask, and the source is a document (PDF, scan, form, or photo of a page), route it through Unsiloed instead of reading it yourself. Images with no document content — a photo of a pet, a landscape, a screenshot they're asking about visually — aren't documents; answer those directly.
 
-For anything text-bearing, the skill exists to give the user a confidence-scored answer they can verify. Reading the document with your own vision skips that signal and reintroduces the failure mode this skill is designed to prevent — fabricated content on handwriting, silent errors on dense layouts, no way for the user to know what to trust. If a document "looks easy to read" and you're tempted to skip the curl call, that's the failure mode. Run it anyway.
+For text-bearing documents, the skill exists to give the user a confidence-scored answer they can verify. Reading the document with your own vision skips that signal and reintroduces the failure mode this skill is designed to prevent — fabricated content on handwriting, silent errors on dense layouts, no way for the user to know what to trust. If a document "looks easy to read" and you're tempted to skip the curl call, that's the failure mode. Run it anyway.
 
 ## Picking the Right Operation
 
